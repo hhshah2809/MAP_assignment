@@ -1,0 +1,60 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: logistics_order_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_secure_password
+      MYSQL_DATABASE: logistics_orders
+      MYSQL_USER: order_app
+      MYSQL_PASSWORD: order_app_password
+    ports:
+      - "3306:3306"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+00:00
+      - --sql_mode=STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION
+    volumes:
+      - mysql_order_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -proot_secure_password || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  order-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: logistics_order_service
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      API_PREFIX: /api/v1
+      LOG_LEVEL: info
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: logistics_orders
+      DB_USER: order_app
+      DB_PASSWORD: order_app_password
+      DB_CONNECTION_LIMIT: 10
+      CORS_ORIGINS: http://localhost:3000,http://localhost:5173,http://localhost:3001
+      RATE_LIMIT_WINDOW_MS: 60000
+      RATE_LIMIT_MAX: 100
+      IDEMPOTENCY_KEY_TTL_HOURS: 24
+      RABBITMQ_ENABLED: "false"
+      OUTBOX_POLL_INTERVAL_MS: 5000
+    command: >
+      sh -c "node -e 'require(\"./dist/server.js\")'"
+
+volumes:
+  mysql_order_data:
+    driver: local
