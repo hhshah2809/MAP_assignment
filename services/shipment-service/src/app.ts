@@ -34,6 +34,7 @@ export function createApp(): Express {
 
   // Health endpoints
   app.use('/', healthRoutes);
+  app.use('/api/v1/shipments', healthRoutes);
 
   // API endpoints
   app.use(env.API_PREFIX, apiRoutes);

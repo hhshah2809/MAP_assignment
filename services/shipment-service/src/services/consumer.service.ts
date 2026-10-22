@@ -103,7 +103,7 @@ export class RabbitMQConsumer {
               latitude: destCoords.lat,
               longitude: destCoords.lon
             },
-            notes: `Auto-generated from confirmed order ${content.orderNumber || content.payload?.orderNumber || ''}`
+            notes: `Auto-generated from order ${content.orderNumber || content.payload?.orderNumber || ''}`
           });
 
           this.channel.ack(msg);

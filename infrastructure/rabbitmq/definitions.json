@@ -5,24 +5,6 @@
       "name": "/"
     }
   ],
-  "users": [
-    {
-      "name": "guest",
-      "password_hash": "wB0+vT290Y8z3hVj+fP27w==",
-      "hashing_algorithm": "rabbit_password_hashing_sha256",
-      "tags": ["administrator"],
-      "limits": {}
-    }
-  ],
-  "permissions": [
-    {
-      "user": "guest",
-      "vhost": "/",
-      "configure": ".*",
-      "write": ".*",
-      "read": ".*"
-    }
-  ],
   "exchanges": [
     {
       "name": "logistics.events",
@@ -73,6 +55,14 @@
     }
   ],
   "bindings": [
+    {
+      "source": "logistics.events",
+      "vhost": "/",
+      "destination": "shipment.order_confirmed.queue",
+      "destination_type": "queue",
+      "routing_key": "order.created.v1",
+      "arguments": {}
+    },
     {
       "source": "logistics.events",
       "vhost": "/",

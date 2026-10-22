@@ -60,6 +60,7 @@ export function createApp(): Application {
 
   // 6. Health & Readiness endpoints (unthrottled for orchestrators/k8s)
   app.use('/', healthRoutes);
+  app.use('/api/v1/orders', healthRoutes);
 
   // 7. Core API v1 routes (throttled)
   app.use(env.API_PREFIX, limiter, apiV1Routes);
