@@ -47,6 +47,7 @@ app.add_middleware(
 
 # Root health endpoints
 app.include_router(health_router)
+app.include_router(health_router, prefix=f"{settings.API_PREFIX}/tracking")
 
 # Versioned API routes
 app.include_router(tracking_router, prefix=settings.API_PREFIX)

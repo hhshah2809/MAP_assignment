@@ -23,8 +23,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, onSele
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (param?: any) => {
+    const silent = param?.silent === true;
+    if (!silent) setLoading(true);
     try {
       const [orderRes, shipRes] = await Promise.all([
         orderApi.list({ limit: 10 }),
@@ -35,12 +36,16 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, onSele
     } catch (err: any) {
       console.warn('Dashboard data fetch note:', err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     loadData();
+    const interval = setInterval(() => {
+      loadData({ silent: true });
+    }, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const totalOrders = orders.length;

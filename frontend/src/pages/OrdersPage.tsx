@@ -38,8 +38,9 @@ export const OrdersPage: React.FC = () => {
     unitPrice: 120.50
   });
 
-  const loadOrders = async () => {
-    setLoading(true);
+  const loadOrders = async (param?: any) => {
+    const silent = param?.silent === true;
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const res = await orderApi.list({
@@ -48,14 +49,18 @@ export const OrdersPage: React.FC = () => {
       });
       setOrders(res.data || []);
     } catch (err: any) {
-      setError(err.message || 'Failed to fetch orders from MS1');
+      if (!silent) setError(err.message || 'Failed to fetch orders from MS1');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     loadOrders();
+    const interval = setInterval(() => {
+      loadOrders({ silent: true });
+    }, 4000);
+    return () => clearInterval(interval);
   }, [statusFilter]);
 
   const handleCreateOrder = async (e: React.FormEvent) => {

@@ -47,24 +47,57 @@ int main() {
         res.status = 204;
     });
 
+// Safe string extractor that handles nulls gracefully
+std::string json_get_string(const json& j, const std::string& key, const std::string& default_val = "") {
+    if (j.contains(key) && !j[key].is_null()) {
+        try {
+            return j[key].get<std::string>();
+        } catch (...) {
+            return default_val;
+        }
+    }
+    return default_val;
+}
+
+// Safe double extractor that handles nulls and numeric strings
+double json_get_double(const json& j, const std::string& key, double default_val = 0.0) {
+    if (j.contains(key) && !j[key].is_null()) {
+        try {
+            if (j[key].is_number()) {
+                return j[key].get<double>();
+            } else if (j[key].is_string()) {
+                return std::stod(j[key].get<std::string>());
+            }
+        } catch (...) {
+            return default_val;
+        }
+    }
+    return default_val;
+}
+
     // Health and Readiness
-    svr.Get("/health", [](const httplib::Request&, httplib::Response& res) {
+    auto health_handler = [](const httplib::Request&, httplib::Response& res) {
         json j = {
             {"status", "UP"},
             {"service", "prediction-service"},
             {"runtime", "C++17 / cpp-httplib"}
         };
         res.set_content(j.dump(), "application/json");
-    });
+    };
 
-    svr.Get("/ready", [](const httplib::Request&, httplib::Response& res) {
+    auto ready_handler = [](const httplib::Request&, httplib::Response& res) {
         json j = {
             {"status", "READY"},
             {"service", "prediction-service"},
             {"engine", "baseline-haversine-eta"}
         };
         res.set_content(j.dump(), "application/json");
-    });
+    };
+
+    svr.Get("/health", health_handler);
+    svr.Get("/api/v1/predictions/health", health_handler);
+    svr.Get("/ready", ready_handler);
+    svr.Get("/api/v1/predictions/ready", ready_handler);
 
     // POST /api/v1/predictions/eta
     svr.Post("/api/v1/predictions/eta", [](const httplib::Request& req, httplib::Response& res) {
@@ -72,14 +105,14 @@ int main() {
             auto body = json::parse(req.body);
 
             PredictionRequest p_req;
-            p_req.shipmentId = body.value("shipmentId", "unknown-shipment");
-            p_req.currentLat = body.at("currentLat").get<double>();
-            p_req.currentLon = body.at("currentLon").get<double>();
-            p_req.destLat = body.at("destLat").get<double>();
-            p_req.destLon = body.at("destLon").get<double>();
-            p_req.currentSpeedKmh = body.value("currentSpeedKmh", 0.0);
-            p_req.averageSpeedKmh = body.value("averageSpeedKmh", 65.0);
-            p_req.scheduledDelivery = body.value("scheduledDelivery", "");
+            p_req.shipmentId = json_get_string(body, "shipmentId", "unknown-shipment");
+            p_req.currentLat = json_get_double(body, "currentLat", 0.0);
+            p_req.currentLon = json_get_double(body, "currentLon", 0.0);
+            p_req.destLat = json_get_double(body, "destLat", 0.0);
+            p_req.destLon = json_get_double(body, "destLon", 0.0);
+            p_req.currentSpeedKmh = json_get_double(body, "currentSpeedKmh", 0.0);
+            p_req.averageSpeedKmh = json_get_double(body, "averageSpeedKmh", 65.0);
+            p_req.scheduledDelivery = json_get_string(body, "scheduledDelivery", "");
 
             // Validation
             if (p_req.currentLat < -90.0 || p_req.currentLat > 90.0 ||
@@ -129,17 +162,29 @@ int main() {
             auto ship_json = json::parse(res_shipment->body);
             auto ship_data = ship_json["data"];
 
+            double originLat = 47.6062;
+            double originLon = -122.3321;
+            double destLat = 45.5152;
+            double destLon = -122.6784;
+
+            if (ship_data.contains("origin") && ship_data["origin"].is_object()) {
+                originLat = json_get_double(ship_data["origin"], "latitude", originLat);
+                originLon = json_get_double(ship_data["origin"], "longitude", originLon);
+            }
+            if (ship_data.contains("destination") && ship_data["destination"].is_object()) {
+                destLat = json_get_double(ship_data["destination"], "latitude", destLat);
+                destLon = json_get_double(ship_data["destination"], "longitude", destLon);
+            }
+
             PredictionRequest p_req;
             p_req.shipmentId = shipmentId;
-            p_req.destLat = ship_data["destination"]["latitude"].get<double>();
-            p_req.destLon = ship_data["destination"]["longitude"].get<double>();
-            p_req.scheduledDelivery = ship_data.value("scheduledDelivery", "");
-
-            // Default location = origin
-            p_req.currentLat = ship_data["origin"]["latitude"].get<double>();
-            p_req.currentLon = ship_data["origin"]["longitude"].get<double>();
+            p_req.destLat = destLat;
+            p_req.destLon = destLon;
+            p_req.currentLat = originLat;
+            p_req.currentLon = originLon;
             p_req.currentSpeedKmh = 0.0;
             p_req.averageSpeedKmh = 65.0;
+            p_req.scheduledDelivery = json_get_string(ship_data, "scheduledDelivery", "");
 
             // 2. Fetch Latest Telemetry from MS3
             httplib::Client cli_tracking(tracking_host, tracking_port);
@@ -148,10 +193,12 @@ int main() {
 
             auto res_tracking = cli_tracking.Get("/api/v1/tracking/shipments/" + shipmentId + "/latest");
             if (res_tracking && res_tracking->status == 200) {
-                auto track_json = json::parse(res_tracking->body);
-                p_req.currentLat = track_json["latitude"].get<double>();
-                p_req.currentLon = track_json["longitude"].get<double>();
-                p_req.currentSpeedKmh = track_json.value("speedKmh", 0.0);
+                try {
+                    auto track_json = json::parse(res_tracking->body);
+                    p_req.currentLat = json_get_double(track_json, "latitude", p_req.currentLat);
+                    p_req.currentLon = json_get_double(track_json, "longitude", p_req.currentLon);
+                    p_req.currentSpeedKmh = json_get_double(track_json, "speedKmh", 0.0);
+                } catch (...) {}
             }
 
             PredictionResult pred = PredictionEngine::predict(p_req);

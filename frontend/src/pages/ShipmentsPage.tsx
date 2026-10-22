@@ -32,8 +32,9 @@ export const ShipmentsPage: React.FC<ShipmentsPageProps> = ({ onSelectShipment }
   });
   const [actionLoading, setActionLoading] = useState(false);
 
-  const loadShipments = async () => {
-    setLoading(true);
+  const loadShipments = async (param?: any) => {
+    const silent = param?.silent === true;
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const res = await shipmentApi.list({
@@ -42,14 +43,18 @@ export const ShipmentsPage: React.FC<ShipmentsPageProps> = ({ onSelectShipment }
       });
       setShipments(res.data || []);
     } catch (err: any) {
-      setError(err.message || 'Failed to fetch shipments from MS2');
+      if (!silent) setError(err.message || 'Failed to fetch shipments from MS2');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     loadShipments();
+    const interval = setInterval(() => {
+      loadShipments({ silent: true });
+    }, 4000);
+    return () => clearInterval(interval);
   }, [statusFilter]);
 
   const handleAssignCarrier = async (e: React.FormEvent) => {
