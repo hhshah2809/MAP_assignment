@@ -1,0 +1,223 @@
+version: '3.8'
+
+services:
+  # -------------------------------------------------------------
+  # Infrastructure Data Stores & Broker
+  # -------------------------------------------------------------
+  mysql:
+    image: mysql:8.0
+    container_name: logistics_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_secure_password
+      MYSQL_DATABASE: logistics_orders
+      MYSQL_USER: order_app
+      MYSQL_PASSWORD: order_app_password
+    ports:
+      - "3306:3306"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+00:00
+      - --sql_mode=STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./infrastructure/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -proot_secure_password || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: logistics_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: logistics_shipments
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_secure_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d logistics_shipments || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  mongodb:
+    image: mongo:7.0
+    container_name: logistics_mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+      - ./infrastructure/mongo/init.js:/docker-entrypoint-initdb.d/init.js:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --eval 'db.runCommand(\"ping\").ok' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: logistics_rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: -rabbitmq_management load_definitions "/etc/rabbitmq/definitions.json"
+    ports:
+      - "5672:5672"     # AMQP Broker
+      - "15672:15672"   # Management Web UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./infrastructure/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics check_running || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  # -------------------------------------------------------------
+  # Microservices
+  # -------------------------------------------------------------
+  # MS1: Order Service (Node.js, Express, TS, MySQL)
+  order-service:
+    build:
+      context: ./services/order-service
+      dockerfile: Dockerfile
+    container_name: logistics_order_service
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      API_PREFIX: /api/v1
+      LOG_LEVEL: info
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: logistics_orders
+      DB_USER: order_app
+      DB_PASSWORD: order_app_password
+      DB_CONNECTION_LIMIT: 10
+      CORS_ORIGINS: http://localhost:3000,http://localhost:5173,http://localhost:3001
+      RABBITMQ_ENABLED: "true"
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      RABBITMQ_ORDER_EXCHANGE: logistics.events
+      OUTBOX_POLL_INTERVAL_MS: 3000
+
+  # MS2: Shipment Service (Node.js, Express, TS, PostgreSQL)
+  shipment-service:
+    build:
+      context: ./services/shipment-service
+      dockerfile: Dockerfile
+    container_name: logistics_shipment_service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "3002:3002"
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      API_PREFIX: /api/v1
+      LOG_LEVEL: info
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: logistics_shipments
+      DB_USER: postgres
+      DB_PASSWORD: postgres_secure_password
+      DB_POOL_MAX: 10
+      CORS_ORIGINS: http://localhost:3000,http://localhost:5173,http://localhost:3002
+      RABBITMQ_ENABLED: "true"
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      RABBITMQ_EXCHANGE: logistics.events
+      OUTBOX_POLL_INTERVAL_MS: 3000
+
+  # MS3: Tracking Service (Python, FastAPI, MongoDB)
+  tracking-service:
+    build:
+      context: ./services/tracking-service
+      dockerfile: Dockerfile
+    container_name: logistics_tracking_service
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "3003:3003"
+    environment:
+      PORT: 3003
+      HOST: 0.0.0.0
+      MONGO_URI: mongodb://mongodb:27017
+      MONGO_DB: logistics_tracking
+      RABBITMQ_ENABLED: "true"
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      RABBITMQ_EXCHANGE: logistics.events
+
+  # MS4: ETA & Risk Prediction Service (C++17, CMake)
+  prediction-service:
+    build:
+      context: ./services/prediction-service
+      dockerfile: Dockerfile
+    container_name: logistics_prediction_service
+    restart: unless-stopped
+    depends_on:
+      - shipment-service
+      - tracking-service
+    ports:
+      - "3004:3004"
+    environment:
+      PORT: 3004
+      SHIPMENT_SERVICE_HOST: shipment-service
+      SHIPMENT_SERVICE_PORT: 3002
+      TRACKING_SERVICE_HOST: tracking-service
+      TRACKING_SERVICE_PORT: 3003
+
+  # Frontend: Control Tower Dashboard (React, Vite, Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: logistics_control_tower_ui
+    restart: unless-stopped
+    depends_on:
+      - order-service
+      - shipment-service
+      - tracking-service
+      - prediction-service
+    ports:
+      - "3000:80"
+
+# -------------------------------------------------------------
+# Persistent Volumes
+# -------------------------------------------------------------
+volumes:
+  mysql_data:
+    driver: local
+  postgres_data:
+    driver: local
+  mongo_data:
+    driver: local
+  rabbitmq_data:
+    driver: local

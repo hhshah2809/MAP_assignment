@@ -1,0 +1,204 @@
+{
+  "info": {
+    "_postman_id": "9921b430-7c70-4154-b9a5-6c86cd77858d",
+    "name": "Order Service — Logistics Control Tower API",
+    "description": "Postman Collection for Microservice 1 (Order Service) in the Logistics Control Tower platform.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3001",
+      "type": "string"
+    },
+    {
+      "key": "orderId",
+      "value": "10000000-0000-4000-8000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "orderNumber",
+      "value": "ORD-20261021-SEED001",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health & Readiness",
+      "item": [
+        {
+          "name": "Service Health (Liveness)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "Service Readiness (MySQL Ping)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/ready",
+              "host": ["{{baseUrl}}"],
+              "path": ["ready"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "Create Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "idem-sample-{{$timestamp}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"a9a6f5e4-1234-4567-8901-123456789012\",\n  \"customerReference\": \"PO-2026-001\",\n  \"currencyCode\": \"INR\",\n  \"origin\": {\n    \"addressLine1\": \"Warehouse 1, GIDC\",\n    \"city\": \"Anand\",\n    \"state\": \"Gujarat\",\n    \"postalCode\": \"388001\",\n    \"countryCode\": \"IN\"\n  },\n  \"destination\": {\n    \"addressLine1\": \"Distribution Centre\",\n    \"city\": \"Ahmedabad\",\n    \"state\": \"Gujarat\",\n    \"postalCode\": \"380001\",\n    \"countryCode\": \"IN\"\n  },\n  \"items\": [\n    {\n      \"itemName\": \"Industrial Components\",\n      \"sku\": \"COMP-001\",\n      \"quantity\": 10,\n      \"unitOfMeasure\": \"PCS\",\n      \"unitPrice\": 150.00,\n      \"weightKg\": 25\n    }\n  ],\n  \"taxAmount\": 100,\n  \"shippingAmount\": 250,\n  \"discountAmount\": 50,\n  \"notes\": \"Handle carefully\",\n  \"requestedPickupAt\": \"2026-10-22T08:00:00.000Z\",\n  \"requestedDeliveryAt\": \"2026-10-23T16:00:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders"]
+            }
+          }
+        },
+        {
+          "name": "Get Order by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/{{orderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "{{orderId}}"]
+            }
+          }
+        },
+        {
+          "name": "Get Order by Order Number",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/number/{{orderNumber}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "number", "{{orderNumber}}"]
+            }
+          }
+        },
+        {
+          "name": "List Orders (Filtered & Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders?page=1&limit=20&status=PENDING&sortBy=createdAt&sortOrder=desc",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "status", "value": "PENDING" },
+                { "key": "sortBy", "value": "createdAt" },
+                { "key": "sortOrder", "value": "desc" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Order (Permitted Fields)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": 1,\n  \"customerReference\": \"PO-2026-001-REV\",\n  \"notes\": \"Updated delivery gate: Gate 4.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/{{orderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "{{orderId}}"]
+            }
+          }
+        },
+        {
+          "name": "Confirm Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Actor-Id",
+                "value": "operator-user-123"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/{{orderId}}/confirm",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "{{orderId}}", "confirm"]
+            }
+          }
+        },
+        {
+          "name": "Cancel Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Actor-Id",
+                "value": "operator-user-123"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Customer requested cancellation prior to freight allocation.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/{{orderId}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "{{orderId}}", "cancel"]
+            }
+          }
+        },
+        {
+          "name": "Get Order Transition History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders/{{orderId}}/history",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders", "{{orderId}}", "history"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

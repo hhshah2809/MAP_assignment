@@ -1,0 +1,196 @@
+{
+  "info": {
+    "name": "Logistics Control Tower API Collection",
+    "description": "Comprehensive API collection for MS1 (Order Service), MS2 (Shipment Service), MS3 (Tracking Service), and MS4 (Prediction Service)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "MS1 — Order Service",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:3001/health"
+          }
+        },
+        {
+          "name": "Readiness Check",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:3001/ready"
+          }
+        },
+        {
+          "name": "Create Order (Idempotent)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "pm-test-{{$timestamp}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"d290f1ee-6c54-4b01-90e6-d701748f0851\",\n  \"customerReference\": \"PO-2026-X1\",\n  \"currencyCode\": \"USD\",\n  \"origin\": {\n    \"addressLine1\": \"100 Industrial Pkwy\",\n    \"city\": \"Seattle\",\n    \"state\": \"WA\",\n    \"countryCode\": \"US\"\n  },\n  \"destination\": {\n    \"addressLine1\": \"500 Commercial Way\",\n    \"city\": \"Portland\",\n    \"state\": \"OR\",\n    \"countryCode\": \"US\"\n  },\n  \"items\": [\n    {\n      \"itemName\": \"Hydraulic Actuator\",\n      \"quantity\": 5,\n      \"unitOfMeasure\": \"EA\",\n      \"unitPrice\": 120.50\n    }\n  ]\n}"
+            },
+            "url": "http://localhost:3001/api/v1/orders"
+          }
+        },
+        {
+          "name": "List Orders",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:3001/api/v1/orders?page=1&limit=10"
+          }
+        },
+        {
+          "name": "Confirm Order",
+          "request": {
+            "method": "POST",
+            "url": "http://localhost:3001/api/v1/orders/{{orderId}}/confirm"
+          }
+        }
+      ]
+    },
+    {
+      "name": "MS2 — Shipment Service",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:3002/health"
+          }
+        },
+        {
+          "name": "List Shipments",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:3002/api/v1/shipments?page=1&limit=10"
+          }
+        },
+        {
+          "name": "Get Shipment By ID",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:3002/api/v1/shipments/{{shipmentId}}"
+          }
+        },
+        {
+          "name": "Assign Carrier & Truck",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"carrierName\": \"Apex Freight Express\",\n  \"truckNumber\": \"TRK-WA-901\",\n  \"driverName\": \"Jane Doe\"\n}"
+            },
+            "url": "http://localhost:3002/api/v1/shipments/{{shipmentId}}/assignment"
+          }
+        },
+        {
+          "name": "Update Shipment Status",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"IN_TRANSIT\",\n  \"notes\": \"Departed origin terminal\"\n}"
+            },
+            "url": "http://localhost:3002/api/v1/shipments/{{shipmentId}}/status"
+          }
+        }
+      ]
+    },
+    {
+      "name": "MS3 — Tracking Service",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:3003/health"
+          }
+        },
+        {
+          "name": "Ingest GPS Telemetry Ping",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shipmentId\": \"{{shipmentId}}\",\n  \"latitude\": 47.1234,\n  \"longitude\": -122.4567,\n  \"speedKmh\": 68.5,\n  \"headingDeg\": 182.0,\n  \"altitudeM\": 85.0\n}"
+            },
+            "url": "http://localhost:3003/api/v1/tracking/locations"
+          }
+        },
+        {
+          "name": "Get Latest Location",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:3003/api/v1/tracking/shipments/{{shipmentId}}/latest"
+          }
+        },
+        {
+          "name": "Get Route GeoJSON",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:3003/api/v1/tracking/shipments/{{shipmentId}}/route"
+          }
+        },
+        {
+          "name": "Start GPS Simulation",
+          "request": {
+            "method": "POST",
+            "url": "http://localhost:3003/api/v1/tracking/simulator/start/{{shipmentId}}?steps=12"
+          }
+        },
+        {
+          "name": "Step GPS Simulation",
+          "request": {
+            "method": "POST",
+            "url": "http://localhost:3003/api/v1/tracking/simulator/step/{{shipmentId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "MS4 — Prediction Service",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:3004/health"
+          }
+        },
+        {
+          "name": "Compute ETA & Delay Risk",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shipmentId\": \"{{shipmentId}}\",\n  \"currentLat\": 47.1234,\n  \"currentLon\": -122.4567,\n  \"destLat\": 45.5152,\n  \"destLon\": -122.6784,\n  \"currentSpeedKmh\": 65.0,\n  \"averageSpeedKmh\": 65.0,\n  \"scheduledDelivery\": \"2026-10-22T16:00:00Z\"\n}"
+            },
+            "url": "http://localhost:3004/api/v1/predictions/eta"
+          }
+        },
+        {
+          "name": "Get Shipment Real-time Prediction",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:3004/api/v1/predictions/shipments/{{shipmentId}}"
+          }
+        }
+      ]
+    }
+  ]
+}
