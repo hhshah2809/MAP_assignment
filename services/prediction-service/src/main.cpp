@@ -14,6 +14,34 @@ std::string get_env(const std::string& key, const std::string& default_val) {
     return val ? std::string(val) : default_val;
 }
 
+// Safe string extractor that handles nulls gracefully
+static std::string json_get_string(const json& j, const std::string& key, const std::string& default_val = "") {
+    if (j.contains(key) && !j[key].is_null()) {
+        try {
+            return j[key].get<std::string>();
+        } catch (...) {
+            return default_val;
+        }
+    }
+    return default_val;
+}
+
+// Safe double extractor that handles nulls and numeric strings
+static double json_get_double(const json& j, const std::string& key, double default_val = 0.0) {
+    if (j.contains(key) && !j[key].is_null()) {
+        try {
+            if (j[key].is_number()) {
+                return j[key].get<double>();
+            } else if (j[key].is_string()) {
+                return std::stod(j[key].get<std::string>());
+            }
+        } catch (...) {
+            return default_val;
+        }
+    }
+    return default_val;
+}
+
 int main() {
     int port = 3004;
     try {
@@ -46,34 +74,6 @@ int main() {
     svr.Options(R"(.*)", [](const httplib::Request&, httplib::Response& res) {
         res.status = 204;
     });
-
-// Safe string extractor that handles nulls gracefully
-std::string json_get_string(const json& j, const std::string& key, const std::string& default_val = "") {
-    if (j.contains(key) && !j[key].is_null()) {
-        try {
-            return j[key].get<std::string>();
-        } catch (...) {
-            return default_val;
-        }
-    }
-    return default_val;
-}
-
-// Safe double extractor that handles nulls and numeric strings
-double json_get_double(const json& j, const std::string& key, double default_val = 0.0) {
-    if (j.contains(key) && !j[key].is_null()) {
-        try {
-            if (j[key].is_number()) {
-                return j[key].get<double>();
-            } else if (j[key].is_string()) {
-                return std::stod(j[key].get<std::string>());
-            }
-        } catch (...) {
-            return default_val;
-        }
-    }
-    return default_val;
-}
 
     // Health and Readiness
     auto health_handler = [](const httplib::Request&, httplib::Response& res) {
